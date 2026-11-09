@@ -6,6 +6,9 @@ param(
     [string]$PairCode,
     [switch]$SetHome,
     [switch]$Remote,
+    [switch]$Debloat,
+    [switch]$Restore,
+    [switch]$DryRun,
     [switch]$Quiet
 )
 $ErrorActionPreference = 'Stop'
@@ -17,6 +20,27 @@ $Activity = "$Package/ru.kraft.launcher.MainActivity"
 $ApkUrl = 'https://github.com/al0ha-c0de/accar-tv/raw/main/accar-tv.apk'
 $ToolsUrl = 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip'
 $Work = Join-Path $env:LOCALAPPDATA 'AccarTV'
+$TvBackup = '/sdcard/AccarTV/disabled.txt'
+
+# Only the maker's ads, data collection and partner auto-installs. Nothing is removed: each one is
+# switched off with pm disable-user and comes back with -Restore. A trailing * matches a family.
+$AdPackages = @(
+    'com.zeasn.services.general',           # Zeasn: ads, weather and shortcuts on the stock home
+    'com.zeasn.deviceportal.asdprovider.*', # Zeasn: device portal, collects data and pings OTA
+    'android.autoinstalls.config.*'         # partner apps installed from Play without asking
+)
+# Never touched, whatever the list says.
+$Protected = '^(android|com\.android\..*|com\.google\.android\.(gms|gsf|tvlauncher|leanbacklauncher)|ru\.accar\.tv)$'
+
+function Select-AdPackages([string[]]$installed, [string]$homePackage) {
+    foreach ($name in $installed) {
+        if ($name -match $Protected -or $name -eq $homePackage) { continue }
+        foreach ($pattern in $AdPackages) {
+            $wanted = if ($pattern.EndsWith('*')) { $name.StartsWith($pattern.TrimEnd('*')) } else { $name -eq $pattern }
+            if ($wanted) { $name; break }
+        }
+    }
+}
 
 function Say([string]$text) { Write-Host $text }
 function Ask([string]$question) { if ($Quiet) { return '' } return (Read-Host $question).Trim() }
@@ -33,7 +57,7 @@ function Fail([string]$text) {
 }
 
 New-Item -ItemType Directory -Force -Path $Work | Out-Null
-Say 'Установка Accar TV'
+Say $(if ($Restore) { 'Возврат сервисов телевизора' } else { 'Установка Accar TV' })
 Say ''
 
 # 1. adb: a copy next to this script, the one on PATH, or Google's official download.
@@ -55,7 +79,7 @@ if (!(Test-Path $adb)) {
 
 # 2. The app itself: a file next to this script, or the latest one from GitHub.
 $apk = Join-Path $PSScriptRoot 'accar-tv.apk'
-if (!(Test-Path $apk)) {
+if (!$Restore -and !(Test-Path $apk)) {
     Say 'Скачиваем Accar TV…'
     $apk = Join-Path $Work 'accar-tv.apk'
     try { Invoke-WebRequest -UseBasicParsing -Uri $ApkUrl -OutFile $apk }
@@ -94,6 +118,31 @@ for ($i = 0; $i -lt 60; $i++) {
 }
 if ($state -ne 'device') { Fail 'Телевизор не ответил. Проверьте, что отладка включена и компьютер в той же сети.' }
 
+function Packages([string]$filter) {
+    Adb -s $target shell pm list packages $filter | ForEach-Object { $_ -replace '^package:', '' } | Where-Object { $_ }
+}
+
+# Restore: switch back on everything this installer switched off, then stop.
+if ($Restore) {
+    $listed = Adb -s $target shell cat $TvBackup | Where-Object { $_ -match '^[\w.]+$' }
+    $local = Join-Path $Work "disabled-$($target -replace '[:.]', '-').txt"
+    if (!$listed -and (Test-Path $local)) { $listed = Get-Content $local }
+    $off = @(Packages '-d')
+    $back = @($listed | Select-Object -Unique | Where-Object { $_ -in $off })
+    if (!$back) { Say 'Отключённых установщиком сервисов нет.' }
+    foreach ($name in $back) {
+        if ($DryRun) { Say "Включили бы: $name"; continue }
+        Adb -s $target shell pm enable $name | Out-Null
+        Say "Включён: $name"
+    }
+    if (!$DryRun) { Adb -s $target shell rm -f $TvBackup | Out-Null; if (Test-Path $local) { Remove-Item $local } }
+    Adb disconnect $target | Out-Null
+    Say ''
+    Say 'Готово. Сервисы телевизора возвращены.'
+    if (!$Quiet) { Read-Host 'Нажмите Enter, чтобы закрыть' | Out-Null }
+    exit 0
+}
+
 # 4. Install, replacing an older Accar TV; a copy signed differently has to go first.
 Say 'Устанавливаем Accar TV…'
 $result = (Adb -s $target install -r $apk) -join ' '
@@ -121,6 +170,26 @@ if ($Remote -or (Yes 'Включить пульт с телефона (клав�
     Adb -s $target shell settings put secure enabled_accessibility_services $enabled | Out-Null
     Adb -s $target shell settings put secure accessibility_enabled 1 | Out-Null
     Say 'Пульт включён: откройте Accar TV → «Настройки» → «Пульт с телефона».'
+}
+
+if ($Debloat -or (Yes 'Отключить рекламу и сбор данных производителя? Вернуть можно в любой момент' $false)) {
+    $homeLine = (Adb -s $target shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME) | Select-Object -Last 1
+    $homePackage = "$homeLine".Split('/')[0].Trim()
+    $found = @(Select-AdPackages @(Packages '-e') $homePackage)
+    if (!$found) { Say 'На этом телевизоре нечего отключать из нашего списка.' }
+    else {
+        $local = Join-Path $Work "disabled-$($target -replace '[:.]', '-').txt"
+        if (!$DryRun) { Adb -s $target shell mkdir -p /sdcard/AccarTV | Out-Null }
+        foreach ($name in $found) {
+            if ($DryRun) { Say "Отключили бы: $name"; continue }
+            # The list is written first, so a cut connection still leaves a way back.
+            Adb -s $target shell "echo $name >> $TvBackup" | Out-Null
+            Add-Content -Path $local -Value $name
+            $off = (Adb -s $target shell pm disable-user --user 0 $name) -join ' '
+            if ($off -match 'disabled') { Say "Отключён: $name" } else { Say "Не отключился: $name ($off)" }
+        }
+        Say 'Вернуть: запустите Restore-TV.bat. «Вернуть прежний экран» в Accar их не включает.'
+    }
 }
 
 Adb -s $target shell monkey -p $Package -c android.intent.category.LEANBACK_LAUNCHER 1 | Out-Null
