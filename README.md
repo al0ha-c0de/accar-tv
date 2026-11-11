@@ -4,6 +4,16 @@
 
 Accar TV — обычное приложение. Прошивка телевизора не меняется, родной экран остаётся на месте и возвращается в один шаг.
 
+![Главный экран Accar TV](screenshots/home.jpg)
+
+| Настройки | Подключение и скорость |
+|---|---|
+| ![Настройки](screenshots/settings.jpg) | ![Панель подключения](screenshots/connection.jpg) |
+
+| Все приложения | Пульт с телефона |
+|---|---|
+| ![Все приложения](screenshots/apps.jpg) | <img src="screenshots/phone-remote.jpg" alt="Пульт на телефоне" width="180"> <img src="screenshots/phone-apps.jpg" alt="Приложения на телефоне" width="180"> |
+
 Ссылка на файл: `https://github.com/al0ha-c0de/accar-tv/raw/main/accar-tv.apk`
 
 ## Какой способ выбрать
