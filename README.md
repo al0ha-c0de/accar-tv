@@ -10,9 +10,15 @@ Accar TV — обычное приложение. Прошивка телеви�
 |---|---|
 | ![Настройки](screenshots/settings.jpg) | ![Панель подключения](screenshots/connection.jpg) |
 
-| Все приложения | Пульт с телефона |
-|---|---|
-| ![Все приложения](screenshots/apps.jpg) | <img src="screenshots/phone-remote.jpg" alt="Пульт на телефоне" width="180"> <img src="screenshots/phone-apps.jpg" alt="Приложения на телефоне" width="180"> |
+![Все приложения](screenshots/apps.jpg)
+
+**Пульт с телефона** открывается по QR-коду с экрана телевизора, ставить ничего не нужно:
+
+<p align="center">
+  <img src="screenshots/phone-remote.jpg" alt="Пульт на телефоне" width="260">
+  &nbsp;&nbsp;
+  <img src="screenshots/phone-apps.jpg" alt="Приложения на телефоне" width="260">
+</p>
 
 Ссылка на файл: `https://github.com/al0ha-c0de/accar-tv/raw/main/accar-tv.apk`
 
