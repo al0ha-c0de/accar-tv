@@ -91,7 +91,7 @@ function Adb { & $adb @args 2>&1 | ForEach-Object { "$_" } }
 # 3. Connecting. Newer TVs pair with a code first; older ones use network debugging on port 5555.
 Say ''
 Say 'На телевизоре: «Настройки» → «Об устройстве» → 7 раз нажмите на «Сборка».'
-Say 'Затем в «Для разработчиков» включите «Отладка по сети» или «Беспроводная отладка».'
+Say 'Затем в «Для разработчиков» включите «Отладка по USB». Если есть «Отладка по сети» или «Беспроводная отладка», включите и её.'
 Say ''
 if (!$PairAddress -and !$Quiet -and (Yes 'Телевизор показывает код сопряжения?' $false)) {
     $PairAddress = Ask 'Адрес и порт сопряжения с экрана (например 192.168.0.50:37123)'
@@ -116,7 +116,7 @@ for ($i = 0; $i -lt 60; $i++) {
     if ($i % 5 -eq 4) { Adb connect $target | Out-Null }
     Start-Sleep -Seconds 1
 }
-if ($state -ne 'device') { Fail 'Телевизор не ответил. Проверьте, что отладка включена и компьютер в той же сети.' }
+if ($state -ne 'device') { Fail 'Телевизор не ответил. Проверьте IP, что включена «Отладка по USB» и компьютер в той же сети. Если не помогло, на этой модели отладка по сети закрыта: поставьте Accar TV с флешки или через Send Files to TV (см. инструкцию).' }
 
 function Packages([string]$filter) {
     Adb -s $target shell pm list packages $filter | ForEach-Object { $_ -replace '^package:', '' } | Where-Object { $_ }
